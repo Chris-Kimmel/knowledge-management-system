@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Hub</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f2f1ee;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --edge:           #898781;
+    --child:          #6d6b66;
+    --border:         #e3e2dd;
+    --bg-3d:          #f4f3f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --surface-2:      #232322;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --edge:           #8d8b84;
+      --child:          #a8a59c;
+      --border:         #333331;
+      --bg-3d:          #141413;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --edge:           #8d8b84;
+    --child:          #a8a59c;
+    --border:         #333331;
+    --bg-3d:          #141413;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg-3d); }
+  body {
+    font: 13px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-primary); overflow: hidden;
+  }
+  #graph { position: absolute; inset: 0; }
+  .scene-fade { transition: opacity .35s ease; }
+
+  .panel {
+    position: absolute; z-index: 5; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.12);
+  }
+  #legend { top: 16px; left: 16px; padding: 12px 14px; min-width: 200px; }
+  #legend h1 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  #legend .row {
+    display: flex; align-items: center; gap: 8px; padding: 3px 0;
+    cursor: pointer; user-select: none;
+  }
+  #legend .row.dimmed { opacity: .35; }
+  #legend .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  #legend .name { flex: 1; color: var(--text-secondary); }
+  #legend .count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  #legend .hint {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    color: var(--text-muted); font-size: 11px;
+  }
+
+  #stats { bottom: 16px; left: 16px; padding: 8px 12px; color: var(--text-muted); font-size: 11px; }
+
+  #controls { top: 16px; right: 16px; padding: 4px; display: flex; gap: 2px; align-items: stretch; }
+  #controls button {
+    border: none; background: transparent; color: var(--text-secondary);
+    font-size: 12px; padding: 6px 10px; border-radius: 7px; cursor: pointer;
+  }
+  #controls button:hover { background: var(--surface-2); }
+  #controls button.active { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+  #controls .sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
+  #labels-toggle.off { color: var(--text-primary); font-weight: 600; }
+
+  #layers { bottom: 16px; right: 16px; padding: 4px; display: flex; gap: 2px; }
+  #layers button {
+    border: none; background: transparent; color: var(--text-secondary);
+    font-size: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  #layers button:hover { background: var(--surface-2); }
+  #layers button.active { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+  #layers .n { color: var(--text-muted); font-size: 10.5px; margin-left: 5px; }
+
+  #inspector {
+    top: 16px; right: 16px; bottom: 76px; width: 350px;
+    padding: 18px; overflow-y: auto; display: none;
+  }
+  #inspector.open { display: block; }
+  #inspector .close {
+    float: right; border: none; background: none; color: var(--text-muted);
+    font-size: 16px; cursor: pointer; line-height: 1;
+  }
+  #inspector h2 { font-size: 15px; margin: 0 24px 10px 0; line-height: 1.3; }
+  #inspector .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  #inspector .pill {
+    font-size: 10.5px; padding: 2px 8px; border-radius: 100px;
+    background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border);
+  }
+  #inspector .pill.tier-strictly_confidential { color: #e34948; border-color: #e34948; }
+  #inspector .pill.tier-confidential { color: #eda100; border-color: #eda100; }
+  #inspector .pill.stale { color: #e34948; border-color: #e34948; }
+  #inspector section { margin-bottom: 16px; }
+  #inspector section h3 {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-muted); margin: 0 0 6px; font-weight: 600;
+  }
+  #inspector p { margin: 0; color: var(--text-secondary); white-space: pre-wrap; }
+  #inspector p.withheld, #inspector .link-why.withheld { font-style: italic; color: var(--text-muted); }
+  #inspector .pill.redacted { border-style: dashed; }
+  #inspector .pill.kind { color: var(--text-primary); font-weight: 600; }
+  #legend .note { max-width: 230px; }
+  #inspector .link-item { padding: 8px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  #inspector .link-item:hover .link-title { color: var(--text-primary); }
+  #inspector .link-title { font-weight: 600; font-size: 12px; display: block; margin-bottom: 2px; }
+  #inspector .link-why { color: var(--text-muted); font-size: 11.5px; }
+  #inspector .meta-row { display: flex; justify-content: space-between; color: var(--text-secondary); padding: 2px 0; }
+  #inspector .meta-row span:last-child { color: var(--text-muted); }
+
+  #hint {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 4; color: var(--text-muted); font-size: 11px; text-align: center;
+    pointer-events: none;
+  }
+  .scene-tooltip { font-size: 11.5px !important; }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+
+<div id="legend" class="panel"></div>
+<div id="stats" class="panel"></div>
+<div id="controls" class="panel">
+  <button id="theme-light">Light</button>
+  <button id="theme-dark">Dark</button>
+  <button id="theme-auto" class="active">Auto</button>
+  <span class="sep"></span>
+  <button id="labels-toggle" title="Off: titles never appear on hover — only a deliberate click reveals one, in the panel">Labels: Auto</button>
+</div>
+<div id="layers" class="panel"></div>
+<div id="inspector" class="panel"></div>
+<div id="hint">drag to orbit · scroll to zoom · click a shard to inspect</div>
+
+<script id="graph-data" type="application/json">{"generated": "2026-10-14T15:36:45", "layers": [0, 1], "layer_counts": {"0": 33, "1": 4}, "nodes": [{"id": "20260917-145954", "title": "Project X: overview of the research threads", "layer": 0, "project": "Project X", "facets": ["work", "project:Project X"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#898781", "dark": "#898781"}, "redacted": true, "kind": ""}, {"id": "20260917-150144", "title": "Project X: rolling progress log", "layer": 0, "project": "Project X", "facets": ["work", "project:Project X"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#898781", "dark": "#898781"}, "redacted": true, "kind": ""}, {"id": "20260917-150306", "title": "Project X: work-hours log", "layer": 0, "project": "Project X", "facets": ["work", "project:Project X"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 4, "color": {"light": "#898781", "dark": "#898781"}, "redacted": true, "kind": ""}, {"id": "20260917-150428", "title": "Project X: long-term memory file", "layer": 0, "project": "Project X", "facets": ["work", "project:Project X"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#898781", "dark": "#898781"}, "redacted": true, "kind": ""}, {"id": "20260917-161607", "title": "Knowledge Hub founding design v0.1: shard schema, the Processor/Hub/Link split, and the bottom-up layering bet", "layer": 0, "project": "KMS (this project)", "facets": ["project:KMS (this project)", "personal"], "confidentiality": "public", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "The root design document of Christopher's Knowledge Hub, written 2026-09-17 before any implementation existed; everything else in the repository derives from it. It splits the system into three elements: the **Hub**, a fractal network of representations that never contains real artifacts (confidential or not); the **Processor**, the LLM plus human, explicitly stateless and swappable so that a new session or a different model is just a different tool on the same persistent store; and the **Link**, with four named functions — initiation (`CLAUDE.md` plus a small index, loaded every session), access layer (permission-gated path from representation to real artifact), capture (the write path), and sync.\n\nThe governing constraint is **constant entry cost**: Hub growth must never raise the cost of starting a session, and any design choice violating it is wrong regardless of other merits. Derived principles: pointer-not-content (one canonical source plus a reliable address beats two copies that drift); fractal uniformity (a leaf and a top cluster share one schema, differing only in how fields are populated — this is what makes arbitrary zoom possible); explicit links whose stated reason lives separately from the summary (Zettelkasten-derived: unreasoned connections are collection, not knowledge production); lazy access-triggered sync; bottom-up emergence; infrastructure-agnostic leaves (local disk, git, MCP connectors — only `address_type` differs); and federation framed as a consequence rather than a feature, since external objective artifacts plus internal subjective representations let two independent instances dock onto the same real things while modelling them differently.\n\nEvery shard, at every level, carries five fields: ID+timestamp, title, summary, contextualization (machine-readable link targets, prose reasoning), and metadata (artifact address, staleness marker, confidentiality tier, children, state history). Format is one markdown file per shard with YAML frontmatter — chosen so `git log` supplies state history for free, so reading one shard costs one shard, and so Obsidian graph tooling stays cheap; JSONL-per-layer was considered and rejected on all three counts. Parent→child is stored one-directionally (`children`); the reverse is derived. Aggregate operations read a **derived index**, a regenerable build artifact that is never a source of truth. There is deliberately no separate project \"registry\": a project pointer is just a shard with a thin summary.\n\nA **layer number is structural depth — how many synthesis steps from a real artifact — not semantic abstraction**. Everything captured from an artifact enters at L0, including already-condensed artifacts like abstracts, meeting summaries or review articles; L0 is therefore semantically heterogeneous by design, and coherence is expected to emerge upward through synthesis rather than be enforced sideways within a layer. Capture requires a stable resolvable address, enough content for a title and summary, at least one proposed connection (an unconnected shard is inert), and a confidentiality tier that sets how much fidelity survives into the summary; facets are optional, additive, retroactively assignable, and explicitly tolerant of early inconsistency. v1 scope discipline: one script, one source type (local markdown), one LLM call producing the five fields.\n\nStaleness is handled per `address_type` — commit hash for `local_git` (compared without ever opening the artifact), SHA-256 behind a size/mtime pre-check for `local_file`, source-exposed versions for `mcp_*`, nothing for immutable things like a sent email or published DOI — while the Hub's own history is always git regardless. **Unreachable is treated as a third state, not a synonym for fresh**: an unplugged drive or unauthorized connector marks the shard *unverified* with a last-confirmed date. A weekly consolidating sweep is sketched as an optional later addition, analogized to sleep, but not required.\n\nHigher layers are generated, not authored. The grouping decision is **link-based community detection (Louvain/Leiden) before embeddings**: no new infrastructure, milliseconds, interpretable from the stated link reasons, and it makes the explicit-links discipline pay off mechanically; its limit is that it only sees declared structure. Embeddings are deferred, and their best first use is judged to be *link suggestion* feeding back into the graph rather than grouping. Grouping along a named axis (work vs. personal, by institution, by person) is identified as faceting, not clustering — deterministic tags coexisting with discovered structure, and the designated lever for reintroducing top-down order later without recapture. At dozens of shards, neither mechanism is needed and hand-grouping is faster. The recorded risk is instability: adding one leaf can silently change what an existing higher-level shard means; the mitigation is that regeneration never overwrites — each run is versioned and the superseded version retained, so drift becomes visible history. Top-down structure is absent on purpose, and chaos is declared a finding.\n\nConfidentiality is assigned at capture and, because raw content never enters storage, compliance attaches to exactly two checkpoints — the capture pipeline and the access layer — enforced with existing mechanisms (separate private repos, OS permissions, Claude Code `settings.json` allow/deny plus `additionalDirectories`) rather than anything bespoke. Visualization (pan/zoom network, Obsidian Canvas with render breakpoints) is deferred until real shards exist. Open at time of writing: the organize axis (PARA vs. Zettelkasten vs. depth split), the Express stage of CODE (undesigned), concrete confidentiality tiers, the embedding model, and the facet vocabulary — expected to accrete from use. A closing decision log records seven choices against their real alternatives, most consequentially that leaves stay external because embedding them would duplicate the source of truth, break fractal uniformity precisely at the leaf, and force the whole Hub into the compliance envelope of its most sensitive item.", "children": [], "superseded_by": null, "degree": 10, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260917-165705", "title": "Project Y: domain foundations notes", "layer": 0, "project": "Project Y", "facets": ["personal", "project:Project Y"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 4, "color": {"light": "#1baf7a", "dark": "#199e70"}, "redacted": true, "kind": ""}, {"id": "20260917-165830", "title": "Project Y: project overview", "layer": 0, "project": "Project Y", "facets": ["personal", "project:Project Y"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#1baf7a", "dark": "#199e70"}, "redacted": true, "kind": ""}, {"id": "20260917-165929", "title": "Project Y: architecture notes", "layer": 0, "project": "Project Y", "facets": ["personal", "project:Project Y"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 4, "color": {"light": "#1baf7a", "dark": "#199e70"}, "redacted": true, "kind": ""}, {"id": "20260917-170029", "title": "Project Y: first strategy specification", "layer": 0, "project": "Project Y", "facets": ["personal", "project:Project Y"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 3, "color": {"light": "#1baf7a", "dark": "#199e70"}, "redacted": true, "kind": ""}, {"id": "20260917-170115", "title": "Project Y: register of AI-collaboration pitfalls", "layer": 0, "project": "Project Y", "facets": ["personal", "project:Project Y"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 6, "color": {"light": "#1baf7a", "dark": "#199e70"}, "redacted": true, "kind": ""}, {"id": "20260917-174950", "title": "Cyan Cycle final report to aws First Incubator", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 11, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-175246", "title": "Cyan Cycle Endbericht to aws First Incubator", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 13, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-175620", "title": "Cyan Cycle Businessplan master (aws First Incubator, April 2026)", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 8, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-175859", "title": "Cyan Cycle Businessplan, final April 2026 text", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 7, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-180142", "title": "Cyan Cycle aws Endabrechnung", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 2, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-180435", "title": "Cyan Cycle accent End Term Review deck", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 11, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-180810", "title": "Cyan Cycle aws Fortschrittsbericht November 2024", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 14, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-181015", "title": "Cyan Cycle aws Fortschrittsbericht Dezember 2024", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 11, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-181601", "title": "Cyan Cycle aws Fortschrittsbericht Jänner 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 10, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-181753", "title": "Cyan Cycle aws Fortschrittsbericht Februar 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 12, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-181949", "title": "Cyan Cycle aws Fortschrittsbericht März 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 13, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-182143", "title": "Cyan Cycle aws Fortschrittsbericht April 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 11, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-182314", "title": "Cyan Cycle aws Fortschrittsbericht Mai 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 12, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260917-182453", "title": "Cyan Cycle aws Fortschrittsbericht Juni 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-17", "summary": "", "children": [], "superseded_by": null, "degree": 10, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260918-091323", "title": "Cyan Cycle aws Fortschrittsbericht Juli 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-18", "summary": "", "children": [], "superseded_by": null, "degree": 8, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260918-091430", "title": "Cyan Cycle aws Fortschrittsbericht August 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-18", "summary": "", "children": [], "superseded_by": null, "degree": 6, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260918-091549", "title": "Cyan Cycle aws Fortschrittsbericht September 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-18", "summary": "", "children": [], "superseded_by": null, "degree": 6, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260918-091703", "title": "Cyan Cycle aws Fortschrittsbericht Oktober 2025", "layer": 0, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "local_file", "last_verified": "2026-09-18", "summary": "", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": ""}, {"id": "20260918-105403", "title": "Knowledge Hub shard.py: the deterministic on-disk shard format — id allocation, git-commit staleness markers, hand-written frontmatter, and the regenerable index", "layer": 0, "project": "KMS (this project)", "facets": ["project:KMS (this project)", "personal"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-18", "summary": "The Knowledge Hub's file-format module, deliberately holding only what can be computed without judgment: ids, addresses, staleness, read/write, index. The split is stated as a principle — address and staleness are facts about a file, so asking an LLM for them invites hallucination where `git log` answers; the model supplies only title, summary and contextualization. Concrete decisions: second-precision ids (minute precision collides in batch runs, making links ambiguous); filenames from immutable ids, never retitleable titles; for tracked files the last touching commit hash compared as a string without opening the artifact, with the known blind spot of uncommitted edits pushing untracked files to SHA-256; YAML emitted by hand in fixed key order because `safe_dump` sorts and quotes unpredictably, making diffs noisy; links stored once on the declaring shard with backlinks and the whole index derived, never written as truth.", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260918-105839", "title": "Knowledge Hub retrieval.py: deterministic link-candidate ranking — reference counting over BM25, per-bucket score normalization, and the cross-project slot reservation", "layer": 0, "project": "KMS (this project)", "facets": ["personal", "project:KMS (this project)"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-18", "summary": "The Hub's capture-side retrieval module: no LLM, no embeddings, no network. It ranks existing shards for a new artifact by explicit reference detection (weighted highest, since a mention is a fact about the text, with generic basenames requiring a matching parent directory) plus stdlib BM25, returning top-k candidates each carrying its retrieval reason, so prompt size stops depending on Hub size. Two corrections are recorded from measurement on the real Hub: a dense project crowds out cross-project candidates (18 Cyan Cycle shards → 84 internal, 1 cross-domain link), fixed by reserving slots for candidates that already cleared the threshold; and pool-wide normalization pushed the max to 136, sinking a genuine cross-project match (raw BM25 8.3) to 0.06, fixed by normalizing within buckets. It ranks only — whether a link exists, and why, is decided downstream.", "children": [], "superseded_by": null, "degree": 6, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260918-110041", "title": "Knowledge Hub extract.py: extension→extractor table, macOS-native PDF/RTF/DOC handling, and Python capture as docstrings-plus-comments", "layer": 0, "project": "KMS (this project)", "facets": ["personal", "project:KMS (this project)"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-18", "summary": "The capture pipeline's text-extraction module, opening §6's deferred multi-format support now that the schema has survived real files. Extraction is transient — text is read once inside the capture call and never stored, so pointer-not-content holds for every format. It shells out only to tools macOS already ships (`pdftotext -layout`, `textutil`), adding formats without adding dependencies. Two decisions carry: too little text is a refusal (`NotEnoughText`, `Unsupported`), because an image-only scan is an artifact that isn't capturable rather than a failed capture; and `.py` files are reduced to docstrings, signatures and comments gathered via `tokenize` (not regex or `ast`, which has no comments), measured on this repo — 19–44 comment lines against 12–22 docstring lines per file — so a docstring-only cut would discard most of the reasoning.", "children": [], "superseded_by": null, "degree": 4, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260918-110236", "title": "Knowledge Hub capture.py: the retrieve→propose→confirm→write capture flow, the four confidentiality tiers, and refusal over silent truncation", "layer": 0, "project": "KMS (this project)", "facets": ["project:KMS (this project)", "personal"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-18", "summary": "The entry point that turns a local file into an L0 shard. Retrieval ranks candidates deterministically, one LLM call proposes only the judgment fields (title, summary, context, links, confidentiality, facets), the human confirms each, and identity/address/staleness are computed rather than proposed. It closes §11's open question by fixing four confidentiality tiers, ordered most to least restricted, which govern how much fidelity reaches the summary. Three refusals are load-bearing: an oversized artifact is rejected, not truncated, since a shortened input yields a representation falsely claiming to stand for the whole; a non-interactive stdin is refused so absent humans are never recorded as agreeing; links to ids that don't exist are dropped.", "children": [], "superseded_by": null, "degree": 5, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260918-110359", "title": "Knowledge Hub build_graph.py: the offline self-contained graph view, and colouring projects with a 3-hue all-pairs-validated palette", "layer": 0, "project": "KMS (this project)", "facets": ["project:KMS (this project)", "personal"], "confidentiality": "confidential", "address_type": "local_git", "last_verified": "2026-09-18", "summary": "Generates `viz/index.html`, a force-directed view of the shard graph, and refreshes `index/manifest.json` alongside it. Two decisions carry. First, the page stays local by construction: graph data is embedded inline as a JSON script block so it opens by double-click with no server and no fetch/CORS, and the script only writes to disk — because summaries were written at a fidelity appropriate to `confidential` inside a private repo, and a hosted viewer would move them past that trust boundary. Second, only three palette hues are used, the prefix validated for the all-pairs case a force-directed layout creates; a fourth project folds to the muted neutral, keeping its true label but sharing colour.", "children": [], "superseded_by": null, "degree": 3, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": false, "kind": ""}, {"id": "20260918-152938", "title": "Project X and Project Y: two AI-assisted workspaces, and the memory-file discipline both run on", "layer": 1, "project": "Project X", "facets": ["personal", "project:Project X", "project:Project Y", "work"], "confidentiality": "confidential", "address_type": "derived", "last_verified": "2026-09-18", "summary": "Two unrelated subjects, a research assistantship and a personal side project, run on one operating discipline, and that discipline is what this group is really about. Both keep a workspace-local memory that separates live state from dated history from never-overwritten reasoning, because memory the AI accumulated across sessions proved unreliable. Both keep an explicit register of how the AI collaborator has misled: options silently narrowed, a methodology chosen but not disclosed, plausible aggregates that dissolve once the raw rows are read. The collective lesson is that a number is not a finding until someone inspects what produced it.", "children": ["20260917-145954", "20260917-150144", "20260917-150306", "20260917-150428", "20260917-165705", "20260917-165830", "20260917-165929", "20260917-170029", "20260917-170115"], "superseded_by": null, "degree": 9, "color": {"light": "#898781", "dark": "#898781"}, "redacted": true, "kind": "cluster"}, {"id": "20260918-153107", "title": "The Knowledge Hub building itself: the v0.1 design and the capture pipeline that implements it", "layer": 1, "project": "KMS (this project)", "facets": ["personal", "project:KMS (this project)"], "confidentiality": "confidential", "address_type": "derived", "last_verified": "2026-09-18", "summary": "One founding design document and the five-module pipeline that implements it — the Hub describing its own machinery. What the group establishes, and no member states alone, is a consistent division of labour: anything that is a fact about a file (identity, address, staleness, link candidates, even palette choice) is computed, the model is asked only for title, summary and contextualization, and the human confirms before anything is written. Implementation closes the design's deliberately open questions — confidentiality tiers, multi-format extraction — and corrects the design where measurement contradicted it. Come here for why refusal is preferred to silent degradation, and for how constant entry cost and pointer-not-content survived contact with real files.", "children": ["20260917-161607", "20260918-105403", "20260918-105839", "20260918-110041", "20260918-110236", "20260918-110359"], "superseded_by": null, "degree": 6, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": true, "kind": "cluster"}, {"id": "20260918-153235", "title": "Cyan Cycle's aws First Incubator term (Nov 2024 – Apr 2026): the monthly hypothesis record and the closing documents compressed out of it", "layer": 1, "project": "Cyan Cycle", "facets": ["project:Cyan Cycle", "work"], "confidentiality": "confidential", "address_type": "derived", "last_verified": "2026-09-18", "summary": "One funded term of one venture, held twice over: as a month-by-month record written in the funder's hypothesis/status format, and as the closing documents that compress eighteen months into a proof-of-concept claim. Read together they show where each claim in the closing documents entered the record. Specifics of the venture's arc are withheld here.", "children": ["20260917-174950", "20260917-175246", "20260917-175620", "20260917-175859", "20260917-180142", "20260917-180435", "20260917-180810", "20260917-181015", "20260917-181601", "20260917-181753", "20260917-181949"], "superseded_by": null, "degree": 11, "color": {"light": "#2a78d6", "dark": "#3987e5"}, "redacted": true, "kind": "cluster"}, {"id": "20260918-153541", "title": "Project X's memory files are the Hub's unwritten spec, while the Hub's retrieval reproduces the silent option narrowing Project Y already catalogued", "layer": 1, "project": "KMS (this project)", "facets": ["personal", "project:KMS (this project)", "project:Project X", "project:Project Y", "work"], "confidentiality": "confidential", "address_type": "derived", "last_verified": "2026-09-18", "summary": "These links run one direction: the Hub's design rules are transcriptions of practices already hand-built in Project X, each with a dated incident behind it. A progress log that labels superseded sections in place instead of deleting them is the design's \"regeneration never overwrites\". An append-only memory file is what per-shard git history is meant to supply for free. An incident in which the AI's memory of an unrelated project leaked into the work is the argument for addressed, permission-gated knowledge over memory the AI accumulates on its own. A second, distinct thing: the Hub's retrieval step *is* the silent option narrowing that Project Y's pitfalls register catalogues, and it adopts that register's remedy: the criterion travels with each candidate.\n\nFrom the generated context: \"The weak point is provenance: one author wrote both sides, so the design 'predicting' the other artifacts' shape is close to tautological.\"", "children": ["20260917-145954", "20260917-150144", "20260917-150306", "20260917-150428", "20260917-161607", "20260917-165705", "20260917-170115", "20260918-105839"], "superseded_by": null, "degree": 8, "color": {"light": "#eb6834", "dark": "#d95926"}, "redacted": true, "kind": "bridge"}], "edges": [{"source": "20260917-150144", "target": "20260917-145954", "kind": "link", "why": ""}, {"source": "20260917-150306", "target": "20260917-145954", "kind": "link", "why": ""}, {"source": "20260917-150306", "target": "20260917-150144", "kind": "link", "why": ""}, {"source": "20260917-150428", "target": "20260917-150144", "kind": "link", "why": ""}, {"source": "20260917-150428", "target": "20260917-150306", "kind": "link", "why": ""}, {"source": "20260917-150428", "target": "20260917-145954", "kind": "link", "why": ""}, {"source": "20260917-161607", "target": "20260917-145954", "kind": "link", "why": ""}, {"source": "20260917-161607", "target": "20260917-150144", "kind": "link", "why": ""}, {"source": "20260917-161607", "target": "20260917-150428", "kind": "link", "why": ""}, {"source": "20260917-161607", "target": "20260917-150306", "kind": "link", "why": ""}, {"source": "20260917-165705", "target": "20260917-161607", "kind": "link", "why": ""}, {"source": "20260917-165830", "target": "20260917-165705", "kind": "link", "why": ""}, {"source": "20260917-165830", "target": "20260917-145954", "kind": "link", "why": ""}, {"source": "20260917-165929", "target": "20260917-165830", "kind": "link", "why": ""}, {"source": "20260917-165929", "target": "20260917-165705", "kind": "link", "why": ""}, {"source": "20260917-170029", "target": "20260917-165705", "kind": "link", "why": ""}, {"source": "20260917-170029", "target": "20260917-165830", "kind": "link", "why": ""}, {"source": "20260917-170029", "target": "20260917-165929", "kind": "link", "why": ""}, {"source": "20260917-170115", "target": "20260917-165830", "kind": "link", "why": ""}, {"source": "20260917-170115", "target": "20260917-165929", "kind": "link", "why": ""}, {"source": "20260917-170115", "target": "20260917-150428", "kind": "link", "why": ""}, {"source": "20260917-170115", "target": "20260917-150144", "kind": "link", "why": ""}, {"source": "20260917-174950", "target": "20260917-170115", "kind": "link", "why": ""}, {"source": "20260917-175246", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-175620", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-175620", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-175859", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-175859", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-175859", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-180142", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-180142", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-180435", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-180435", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-180435", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-180435", "target": "20260917-175859", "kind": "link", "why": ""}, {"source": "20260917-180810", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-180810", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-180810", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-180810", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-180810", "target": "20260917-175859", "kind": "link", "why": ""}, {"source": "20260917-181015", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-181015", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-181015", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-181015", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-181015", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-175859", "kind": "link", "why": ""}, {"source": "20260917-181601", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-181601", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-181753", "target": "20260917-175859", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-181753", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-181601", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-174950", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-181949", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-181949", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-181753", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-181601", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-182143", "target": "20260917-175620", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-182143", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-181949", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-181753", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-180435", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-181601", "kind": "link", "why": ""}, {"source": "20260917-182314", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-182314", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-182143", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-181949", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-181753", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260917-182453", "target": "20260917-175246", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-182453", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-182314", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-182143", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-181753", "kind": "link", "why": ""}, {"source": "20260918-091323", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260918-091430", "target": "20260918-091323", "kind": "link", "why": ""}, {"source": "20260918-091430", "target": "20260917-182453", "kind": "link", "why": ""}, {"source": "20260918-091430", "target": "20260917-182314", "kind": "link", "why": ""}, {"source": "20260918-091430", "target": "20260917-182143", "kind": "link", "why": ""}, {"source": "20260918-091430", "target": "20260917-181015", "kind": "link", "why": ""}, {"source": "20260918-091549", "target": "20260918-091430", "kind": "link", "why": ""}, {"source": "20260918-091549", "target": "20260918-091323", "kind": "link", "why": ""}, {"source": "20260918-091549", "target": "20260917-182453", "kind": "link", "why": ""}, {"source": "20260918-091549", "target": "20260917-182143", "kind": "link", "why": ""}, {"source": "20260918-091549", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260918-091703", "target": "20260918-091549", "kind": "link", "why": ""}, {"source": "20260918-091703", "target": "20260917-182453", "kind": "link", "why": ""}, {"source": "20260918-091703", "target": "20260917-180810", "kind": "link", "why": ""}, {"source": "20260918-091703", "target": "20260917-182314", "kind": "link", "why": ""}, {"source": "20260918-091703", "target": "20260917-181949", "kind": "link", "why": ""}, {"source": "20260918-105403", "target": "20260917-161607", "kind": "link", "why": "This module is the direct implementation of that design's §4/§5/§7 and cites them by section number: it realizes the five-field schema, the markdown-plus-frontmatter format chosen so `git log` gives state history for free, one-directional link storage with derived backlinks, the regenerable index that is never a source of truth, and the per-address_type staleness table. It also records where implementation refines the design — second-precision ids because batch capture collides within a minute, and the admission that a commit-hash marker is blind to uncommitted edits, forcing untracked files onto content hashing."}, {"source": "20260918-105839", "target": "20260917-161607", "kind": "link", "why": "This module implements that design's §3 (constant entry cost, bounded capture prompt), §4 (links stored on the declaring shard and the reverse derived — the stated reason retrieval only checks the new-artifact→shard direction), §7 (never reopen artifacts the Hub does not store) and §8 (the grouping pass that will reuse this ranking). It also supplies the first empirical pressure on the design's untested bet that declared structure suffices: bottom-up emergence produced project-internal cliques, and the cross-project reservation is the corrective."}, {"source": "20260918-105839", "target": "20260918-105403", "kind": "link", "why": "Sibling module in the same pipeline, built on the same explicit split: facts computable from text or filesystem stay in deterministic code, judgment goes to the model. shard.py owns ids, addresses and staleness; retrieval.py owns candidate scoring; neither writes a link's reason. Retrieval consumes exactly the shard records, facets and derived index shard.py defines, so a change to that stored representation breaks this ranking."}, {"source": "20260918-105839", "target": "20260917-181949", "kind": "link", "why": ""}, {"source": "20260918-105839", "target": "20260917-170115", "kind": "link", "why": ""}, {"source": "20260918-110041", "target": "20260917-161607", "kind": "link", "why": "Implements two of the founding design's stated constraints by name: pointer-not-content (§3) is what makes extracted text transient rather than stored, and §6's 'enough content for a title and summary' is what turns a thin or image-only file into a refusal instead of an empty shard. It also closes §6's deliberate deferral of multi-format support, so it is the first recorded discharge of a founding-document open item."}, {"source": "20260918-110041", "target": "20260918-105403", "kind": "link", "why": "The same principled division of labour, applied at the other end of the pipeline: shard.py withholds addresses and staleness from the LLM because they are facts computable from git; extract.py withholds function bodies and decides capturability by character count for the same reason. Together they define the deterministic envelope inside which the single LLM call operates."}, {"source": "20260918-110041", "target": "20260918-105839", "kind": "link", "why": "The two modules are the deterministic front half of one capture call — extract.py supplies the artifact text that retrieval.py's reference detection and BM25 score against the existing Hub. A change in what extract.py keeps from a .py file (comments and docstrings, not bodies) directly changes which explicit references retrieval can detect, so the two have a dependency that is easy to miss."}, {"source": "20260918-110236", "target": "20260917-161607", "kind": "link", "why": "capture.py is the implementation of the design's v1 scope clause (§6), enforces its layer-is-structural-depth rule by having no layer selection at all, and closes the design's explicitly open question on confidentiality tiers by fixing four of them."}, {"source": "20260918-110236", "target": "20260918-105839", "kind": "link", "why": "Direct dependency: capture.py's step 1 is retrieval.py, and retrieval's whole purpose — keeping prompt size independent of Hub size — is what makes capture's single LLM call viable as the Hub grows."}, {"source": "20260918-110236", "target": "20260918-110041", "kind": "link", "why": "Direct dependency for step 0, and the two share a refusal discipline: extract.py raises NotEnoughText rather than returning a thin extraction, which capture.py mirrors by refusing an oversized artifact instead of silently truncating it."}, {"source": "20260918-110236", "target": "20260918-105403", "kind": "link", "why": "The counterpart of the judgment/fact split: capture.py proposes only the fields needing judgment because shard.py computes ids, addresses and staleness from git and SHA-256, where a model would hallucinate. capture.py also relies on shard.py's derived-index convention when validating link targets."}, {"source": "20260918-110359", "target": "20260917-161607", "kind": "link", "why": "Implements the visualization the founding design explicitly deferred, and enacts two of its principles: the derived index as a regenerable build artifact rather than a source of truth, and confidentiality as something enforced at fixed checkpoints with existing mechanisms (here, a private repo's trust boundary) rather than anything bespoke. It also gives the facet vocabulary, left open there, its first mechanical consumer via project colouring."}, {"source": "20260918-110359", "target": "20260918-105403", "kind": "link", "why": "Shares the regenerable-artifact discipline and the same output: build_graph.py refreshes the `index/manifest.json` that shard.py defines, and both treat derived structure (backlinks, index, viz page) as recomputable rather than written truth."}, {"source": "20260918-110359", "target": "20260918-110236", "kind": "link", "why": "Depends on the four confidentiality tiers capture.py fixed. The viewer does no re-checking of fidelity; it assumes each summary was already written at its tier's fidelity and instead protects the boundary those tiers presuppose by never transmitting anything off disk."}, {"source": "20260918-152938", "target": "20260917-145954", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-150144", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-150306", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-150428", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-165705", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-165830", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-165929", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-170029", "kind": "child", "why": ""}, {"source": "20260918-152938", "target": "20260917-170115", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260917-161607", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260918-105403", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260918-105839", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260918-110041", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260918-110236", "kind": "child", "why": ""}, {"source": "20260918-153107", "target": "20260918-110359", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-174950", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-175246", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-175620", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-175859", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-180142", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-180435", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-180810", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-181015", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-181601", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-181753", "kind": "child", "why": ""}, {"source": "20260918-153235", "target": "20260917-181949", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-145954", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-150144", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-150306", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-150428", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-161607", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-165705", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260917-170115", "kind": "child", "why": ""}, {"source": "20260918-153541", "target": "20260918-105839", "kind": "child", "why": ""}], "legend": [{"project": "Cyan Cycle", "count": 19, "color": {"light": "#2a78d6", "dark": "#3987e5"}}, {"project": "KMS (this project)", "count": 8, "color": {"light": "#eb6834", "dark": "#d95926"}}, {"project": "Project X", "count": 5, "color": {"light": "#898781", "dark": "#898781"}}, {"project": "Project Y", "count": 5, "color": {"light": "#1baf7a", "dark": "#199e70"}}], "note": "A redacted view of a real, private Knowledge Hub. The structure (shards, links, layers) is unchanged. Titles of confidential shards are replaced or shortened, and their summaries and link reasons are withheld. Only the shards about the KMS itself, which describe the public code, keep their text."}</script>
+<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("graph-data").textContent);
+  var byId = {}; DATA.nodes.forEach(function (n) { byId[n.id] = n; });
+
+  // Layers stack along Y like floors of a building. Pinning fy per layer and
+  // letting the force settle x/z is what makes the whole thing work: each
+  // layer lays itself out as a flat graph, while a parent is pulled toward the
+  // centroid of its children by its child edges, so it comes to rest directly
+  // above what it stands for.
+  var LAYER_GAP = 190;
+  var maxLayer = Math.max.apply(null, DATA.layers);
+  function layerY(l) { return (l - maxLayer / 2) * LAYER_GAP; }
+
+  // ---- theme -------------------------------------------------------------
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function isDark() {
+    var t = document.documentElement.getAttribute("data-theme");
+    if (t === "dark") return true;
+    if (t === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  function applyTheme(mode) {
+    var root = document.documentElement;
+    if (mode === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", mode);
+    ["light", "dark", "auto"].forEach(function (m) {
+      document.getElementById("theme-" + m).classList.toggle("active", m === mode);
+    });
+    try { localStorage.setItem("kh-theme", mode); } catch (e) {}
+    repaint();
+  }
+  var savedTheme = "auto";
+  try { savedTheme = localStorage.getItem("kh-theme") || "auto"; } catch (e) {}
+
+  // ---- graph -------------------------------------------------------------
+  var nodes = DATA.nodes.map(function (n) {
+    return Object.assign({}, n, { fy: layerY(n.layer) });
+  });
+  var links = DATA.edges.map(function (e) { return Object.assign({}, e); });
+
+  var maxDeg = Math.max(1, Math.max.apply(null, nodes.map(function (n) { return n.degree; })));
+  function nodeSize(n) { return 2 + 5 * (Math.log(n.degree + 1) / Math.log(maxDeg + 1)); }
+
+  var activeProject = null;
+  var focusLayer = null;      // null = overview across all layers
+  var selectedId = null;
+  var neighbours = null;      // ids highlighted by the current selection
+
+  function nodeVisible(n) {
+    if (focusLayer !== null && n.layer !== focusLayer) return false;
+    if (activeProject && n.project !== activeProject) return false;
+    return true;
+  }
+  function linkVisible(l) {
+    var s = typeof l.source === "object" ? l.source : byId[l.source];
+    var t = typeof l.target === "object" ? l.target : byId[l.target];
+    if (!s || !t) return false;
+    // In a single-layer view the vertical edges lead off-screen, so they are
+    // hidden rather than left dangling into empty space.
+    if (focusLayer !== null && (s.layer !== focusLayer || t.layer !== focusLayer)) return false;
+    return nodeVisible(s) && nodeVisible(t);
+  }
+
+  var Graph = ForceGraph3D()(document.getElementById("graph"))
+    .graphData({ nodes: nodes, links: links })
+    .nodeId("id")
+    .nodeVal(nodeSize)
+    .nodeColor(function (n) {
+      if (neighbours && !neighbours[n.id]) return isDark() ? "#3a3a38" : "#d8d7d2";
+      return isDark() ? n.color.dark : n.color.light;
+    })
+    .nodeOpacity(0.95)
+    .nodeVisibility(nodeVisible)
+    .nodeLabel(function (n) { return labelsEnabled ? n.title : ""; })
+    .linkVisibility(linkVisible)
+    .linkColor(function (l) {
+      if (neighbours) {
+        var s = l.source.id || l.source, t = l.target.id || l.target;
+        if (!neighbours[s] || !neighbours[t]) return isDark() ? "#2a2a28" : "#e8e7e2";
+      }
+      return l.kind === "child" ? cssVar("--child") : cssVar("--edge");
+    })
+    .linkWidth(function (l) { return l.kind === "child" ? 0.7 : 0.4; })
+    .linkOpacity(0.5)
+    .linkDirectionalArrowLength(function (l) { return l.kind === "child" ? 2.5 : 0; })
+    .linkDirectionalArrowColor(function () { return cssVar("--child"); })
+    .onNodeClick(function (n) { select(n.id); })
+    .onBackgroundClick(function () { clearSelection(); })
+    .showNavInfo(false)
+    .backgroundColor(cssVar("--bg-3d"));
+
+  Graph.d3Force("charge").strength(-90);
+  Graph.d3Force("link").distance(function (l) { return l.kind === "child" ? 60 : 34; });
+
+  function repaint() {
+    Graph.backgroundColor(cssVar("--bg-3d"));
+    Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor());
+    renderLegend();
+  }
+
+  // ---- camera: overview <-> a single layer --------------------------------
+  function layerExtent(l) {
+    var pts = nodes.filter(function (n) { return n.layer === l && n.x !== undefined; });
+    if (!pts.length) return { x: 0, z: 0, radius: 120 };
+    var cx = pts.reduce(function (a, n) { return a + n.x; }, 0) / pts.length;
+    var cz = pts.reduce(function (a, n) { return a + n.z; }, 0) / pts.length;
+    var radius = Math.max.apply(null, pts.map(function (n) {
+      return Math.hypot(n.x - cx, n.z - cz);
+    }));
+    return { x: cx, z: cz, radius: Math.max(radius, 60) };
+  }
+  // Camera distance is computed from the layer's real spread and the camera's
+  // own field of view, rather than a tuned multiplier. zoomToFit() was tried
+  // first and abandoned: it re-derives the camera direction from the orbit
+  // target, which fought the top-down angle being set here and left the layer
+  // viewed edge-on.
+  function fitDistance(radius) {
+    var cam = Graph.camera();
+    var fov = (cam && cam.fov ? cam.fov : 75) * Math.PI / 180;
+    return (radius / Math.tan(fov / 2)) * 1.25;  // 25% margin
+  }
+  function flyToOverview() {
+    focusLayer = null;
+    refreshVisibility();
+    // Framed from where the nodes actually are, once they are anywhere: the
+    // layout keeps expanding for a while after load, and a camera placed for
+    // the initial clump ends up inside the settled graph.
+    var span = (DATA.layers.length || 1) * LAYER_GAP;
+    var placed = nodes.filter(function (n) { return n.x !== undefined; });
+    var r = placed.length ? Math.max.apply(null, placed.map(function (n) { return Math.hypot(n.x, n.y, n.z); })) : 0;
+    var dist = Math.max(span * 1.1, fitDistance(r));
+    var zoom = Number(new URLSearchParams(window.location.search).get("zoom")) || 1;
+    Graph.cameraPosition({ x: 0, y: dist * 0.5 / zoom, z: dist * 0.866 / zoom }, { x: 0, y: 0, z: 0 }, 800);
+  }
+  function flyToLayer(l) {
+    focusLayer = l;
+    refreshVisibility();
+    var c = layerExtent(l);
+    // Not exactly straight down: a hair of z offset keeps the camera's up-vector
+    // well defined, which a perfectly vertical look-down leaves ambiguous.
+    Graph.cameraPosition({ x: c.x, y: layerY(l) + fitDistance(c.radius), z: c.z + 1.5 },
+                         { x: c.x, y: layerY(l), z: c.z }, 800);
+  }
+  function refreshVisibility() {
+    Graph.nodeVisibility(nodeVisible).linkVisibility(linkVisible);
+    renderLayers();
+    renderLegend();
+    document.getElementById("hint").textContent = focusLayer === null
+      ? "drag to orbit · scroll to zoom · click a shard to inspect"
+      : "layer " + focusLayer + " seen flat · click Overview to pull back out";
+  }
+
+  function renderLayers() {
+    var el = document.getElementById("layers");
+    var html = '<button data-layer="overview"' + (focusLayer === null ? ' class="active"' : '') +
+               '>Overview</button>';
+    DATA.layers.slice().reverse().forEach(function (l) {
+      html += '<button data-layer="' + l + '"' + (focusLayer === l ? ' class="active"' : '') +
+              '>L' + l + '<span class="n">' + (DATA.layer_counts[String(l)] || 0) + '</span></button>';
+    });
+    el.innerHTML = html;
+    el.querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var v = b.getAttribute("data-layer");
+        if (v === "overview") flyToOverview(); else flyToLayer(Number(v));
+      });
+    });
+  }
+
+  // ---- selection ----------------------------------------------------------
+  function select(id) {
+    selectedId = id;
+    neighbours = {};
+    neighbours[id] = true;
+    DATA.edges.forEach(function (e) {
+      if (e.source === id) neighbours[e.target] = true;
+      if (e.target === id) neighbours[e.source] = true;
+    });
+    openInspector(id);
+    Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor());
+  }
+  function clearSelection() {
+    selectedId = null; neighbours = null;
+    document.getElementById("inspector").classList.remove("open");
+    Graph.nodeColor(Graph.nodeColor()).linkColor(Graph.linkColor());
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function metaRow(k, v) {
+    return '<div class="meta-row"><span>' + k + "</span><span>" + escapeHtml(String(v)) + "</span></div>";
+  }
+
+  function openInspector(id) {
+    var n = byId[id];
+    if (!n) return;
+    var out = DATA.edges.filter(function (e) { return e.source === id && e.kind === "link"; });
+    var inc = DATA.edges.filter(function (e) { return e.target === id && e.kind === "link"; });
+    var kids = n.children || [];
+    var parents = DATA.edges.filter(function (e) { return e.target === id && e.kind === "child"; })
+                            .map(function (e) { return e.source; });
+
+    var html = '<button class="close" id="inspector-close">×</button>';
+    html += "<h2>" + escapeHtml(n.title) + "</h2>";
+    html += '<div class="pills">';
+    html += '<span class="pill">L' + n.layer + "</span>";
+    html += '<span class="pill">' + escapeHtml(n.project) + "</span>";
+    html += '<span class="pill tier-' + n.confidentiality + '">' + n.confidentiality + "</span>";
+    if (n.superseded_by) html += '<span class="pill stale">superseded</span>';
+    if (n.kind) html += '<span class="pill kind">' + escapeHtml(n.kind) + "</span>";
+    if (n.redacted) html += '<span class="pill redacted">redacted</span>';
+    html += "</div>";
+    if (n.summary) {
+      html += "<section><h3>Summary" + (n.redacted ? " · redacted paraphrase" : "") + "</h3><p>" +
+              escapeHtml(n.summary) + "</p></section>";
+    } else {
+      html += '<section><h3>Summary</h3><p class="withheld">Withheld: this shard is ' +
+              escapeHtml(n.confidentiality) + ".</p></section>";
+    }
+
+    function listOf(heading, items) {
+      if (!items.length) return "";
+      var s = "<section><h3>" + heading + " (" + items.length + ")</h3>";
+      items.forEach(function (it) {
+        var t = byId[it.id];
+        s += '<div class="link-item" data-goto="' + it.id + '">' +
+             '<span class="link-title">' + (it.prefix || "") + escapeHtml(t ? t.title : it.id) + "</span>" +
+             (it.why ? '<span class="link-why">' + escapeHtml(it.why) + "</span>"
+                     : (it.link && DATA.note ? '<span class="link-why withheld">reason withheld</span>' : "")) +
+             "</div>";
+      });
+      return s + "</section>";
+    }
+    html += listOf("Stands for", kids.map(function (c) { return { id: c, prefix: "↓ " }; }));
+    html += listOf("Part of", parents.map(function (p) { return { id: p, prefix: "↑ " }; }));
+    html += listOf("Links out", out.map(function (e) { return { id: e.target, prefix: "→ ", why: e.why, link: true }; }));
+    html += listOf("Linked from", inc.map(function (e) { return { id: e.source, prefix: "← ", why: e.why, link: true }; }));
+
+    html += "<section><h3>Metadata</h3>";
+    html += metaRow("facets", (n.facets || []).join(", ") || "none");
+    html += metaRow("address type", n.address_type);
+    html += metaRow("last verified", n.last_verified);
+    html += "</section>";
+
+    var insp = document.getElementById("inspector");
+    insp.innerHTML = html;
+    insp.classList.add("open");
+    document.getElementById("inspector-close").addEventListener("click", clearSelection);
+    insp.querySelectorAll(".link-item").forEach(function (item) {
+      item.addEventListener("click", function () {
+        var target = byId[item.getAttribute("data-goto")];
+        if (!target) return;
+        // Following a child or parent edge moves between layers, so the view
+        // follows too rather than selecting something currently invisible.
+        if (focusLayer !== null && target.layer !== focusLayer) flyToLayer(target.layer);
+        select(target.id);
+      });
+    });
+  }
+
+  // ---- labels (ambient exposure gate) -------------------------------------
+  var labelsEnabled = true;
+  try { labelsEnabled = localStorage.getItem("kh-labels") !== "off"; } catch (e) {}
+  function applyLabelsToggle() {
+    var btn = document.getElementById("labels-toggle");
+    btn.textContent = "Labels: " + (labelsEnabled ? "Auto" : "Off");
+    btn.classList.toggle("off", !labelsEnabled);
+    try { localStorage.setItem("kh-labels", labelsEnabled ? "auto" : "off"); } catch (e) {}
+    Graph.nodeLabel(Graph.nodeLabel());
+    renderLegend();
+  }
+
+  // ---- legend --------------------------------------------------------------
+  var REDACTED_NAME = "••••••";
+  function renderLegend() {
+    var el = document.getElementById("legend");
+    var html = "<h1>Knowledge Hub</h1>";
+    DATA.legend.forEach(function (l) {
+      var dim = activeProject && activeProject !== l.project ? " dimmed" : "";
+      var label = labelsEnabled ? l.project : REDACTED_NAME;
+      html += '<div class="row' + dim + '" data-project="' + l.project + '">' +
+        '<span class="swatch" style="background:' + (isDark() ? l.color.dark : l.color.light) + '"></span>' +
+        '<span class="name">' + label + '</span><span class="count">' + l.count + '</span></div>';
+    });
+    html += '<div class="hint">Click a project to isolate it.</div>';
+    if (DATA.note) html += '<div class="hint note">' + escapeHtml(DATA.note) + "</div>";
+    el.innerHTML = html;
+    el.querySelectorAll(".row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        var p = row.getAttribute("data-project");
+        activeProject = activeProject === p ? null : p;
+        refreshVisibility();
+      });
+    });
+  }
+
+  // ---- init ----------------------------------------------------------------
+  ["light", "dark", "auto"].forEach(function (m) {
+    document.getElementById("theme-" + m).addEventListener("click", function () { applyTheme(m); });
+  });
+  document.getElementById("labels-toggle").addEventListener("click", function () {
+    labelsEnabled = !labelsEnabled;
+    applyLabelsToggle();
+  });
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+      if (!document.documentElement.getAttribute("data-theme")) repaint();
+    });
+  }
+  document.getElementById("stats").innerHTML =
+    DATA.nodes.length + " shards &middot; " +
+    DATA.edges.filter(function (e) { return e.kind === "link"; }).length + " links &middot; " +
+    DATA.edges.filter(function (e) { return e.kind === "child"; }).length + " children &middot; generated " +
+    DATA.generated;
+
+  // The canvas follows the window rather than keeping its size at load.
+  function fitCanvas() { Graph.width(window.innerWidth).height(window.innerHeight); }
+  window.addEventListener("resize", fitCanvas);
+  fitCanvas();
+
+  // URL parameters pin a view, so a figure can be regenerated exactly:
+  // ?theme=light&labels=off&layer=1&select=<id>&zoom=1.4
+  var params = new URLSearchParams(window.location.search);
+  if (params.get("theme")) savedTheme = params.get("theme");
+  if (params.get("labels")) labelsEnabled = params.get("labels") !== "off";
+  applyTheme(savedTheme);
+  applyLabelsToggle();
+  renderLayers();
+  flyToOverview();
+  if (params.get("select") && byId[params.get("select")]) select(params.get("select"));
+  // Once the layout first settles, frame it properly: a pinned layer
+  // (?layer=) or, by default, the overview (see flyToOverview). One handler,
+  // since the graph keeps only one.
+  var settled = false;
+  var pinnedLayer = params.get("layer");
+  Graph.onEngineStop(function () {
+    if (settled) return;
+    settled = true;
+    if (pinnedLayer !== null && pinnedLayer !== "overview") flyToLayer(Number(pinnedLayer));
+    else if (focusLayer === null) flyToOverview();
+  });
+})();
+</script>
+</body>
+</html>
